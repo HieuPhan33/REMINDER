@@ -1,0 +1,9 @@
+checkpoints
+data
+.idea
+pretrained
+compute_features.py 
+save_features.py
+results
+logs
+scripts/cityscapesDomain/reminder_11-5.sh
