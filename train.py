@@ -133,8 +133,6 @@ class Trainer:
         if self.rkd > 0 and self.step > 0 and prototypes is not None:
             self.rkd_loss = RebalanceKD(prototypes=prototypes)
 
-        if self.scl > 0:
-            self.soft_contrastive_loss = SoftContrastiveLoss()
         # ICARL
         self.icarl_combined = False
         self.icarl_only_dist = False
@@ -334,7 +332,7 @@ class Trainer:
             outputs, features = model(images, ret_intermediate=self.ret_intermediate)
 
             # Update prototypes
-            if self.rkd_flag or self.scl_flag:
+            if self.rkd_flag:
                 pre_logits = features['pre_logits']
 
                 cur_classes = list(range(self.old_classes, self.nb_current_classes))
@@ -445,27 +443,6 @@ class Trainer:
                 if kd_mask is not None and self.kd_mask_adaptative_factor:
                     lkd = lkd.mean(dim=(1, 2)) * kd_mask.float().mean(dim=(1, 2))
                 lkd = torch.mean(lkd)
-
-            if self.scl_flag:
-                # # Update prototypes
-                # pre_logits = features['pre_logits']
-                # if 'cityscapes' in self.dataset:
-                #     cur_classes = list(range(self.nb_current_classes))
-                # else:
-                #     cur_classes = list(range(self.old_classes, self.nb_current_classes))
-                # batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
-                labels_downsample = F.interpolate(labels.unsqueeze(1).float(), size=(pre_logits.size(-2), pre_logits.size(-1)),
-                                                  mode='nearest').squeeze(1).long()
-                mask_fg = (labels.view(-1) < 255) & (labels.view(-1) >= 0)
-                # scl_current = self.scl * self.soft_contrastive_loss(features=pre_logits, seg=labels_downsample, mask=mask_fg,
-                #                                                     current_prototypes=batch_prototypes, ref_prototypes=batch_prototypes, hard=True)
-                # scl_prev = 0
-                # if self.old_prototypes is not None:
-                #     scl_prev = self.scl * self.soft_contrastive_loss(features=pre_logits, seg=labels_downsample, mask=mask_fg,
-                #                                                         current_prototypes=batch_prototypes,
-                #                                                      ref_prototypes=self.old_prototypes)
-                # scl = scl_prev
-                scl = self.scl * self.soft_contrastive_loss(labels=labels, features=features['body'], mask=mask_fg, prototypes=self.old_prototypes)
 
             if self.rkd_flag:
                 mask_fg = (labels.view(-1) < 255) & (labels.view(-1) >= self.old_classes)
