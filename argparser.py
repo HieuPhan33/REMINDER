@@ -277,7 +277,7 @@ def get_argparser():
     )
 
     parser.add_argument(
-        "--rebal_kd",
+        "--csw_kd",
         type=float,
         default=0.,  # Distillation on Output
         help="Set this hyperparameter to a value greater than "

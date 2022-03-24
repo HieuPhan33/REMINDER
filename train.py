@@ -93,7 +93,7 @@ class Trainer:
         self.lde_loss = nn.MSELoss()
 
         self.lkd = opts.loss_kd
-        self.rkd = opts.rebal_kd
+        self.rkd = opts.csw_kd
         self.scl = opts.loss_sc
         self.lkd_mask = opts.kd_mask
         self.kd_mask_adaptative_factor = opts.kd_mask_adaptative_factor
