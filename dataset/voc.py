@@ -11,7 +11,7 @@ from torch import distributed
 from .utils import Subset, filter_images, group_images
 import torch
 from torch import nn
-import gensim.downloader as api
+
 classes = {
     0: 'background',
     1: 'aeroplane',
