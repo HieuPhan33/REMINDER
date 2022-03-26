@@ -374,8 +374,9 @@ class UnbiasedRebalanceKD(nn.Module):
         r_map = pairwise_cosine_sim(proto_by_label, self.prototypes.to(proto_by_label.device)) # T * N_old
         r_map = F.softmax(r_map, dim=1)
 
-        #r_map[r_map < (1.0/r_map.size(1))] = 0.0
-        #r_map.detach()
+        th_scale = 1.0
+        r_map[r_map < (th_scale/r_map.size(1))] = 0.0
+        r_map.detach()
         labels = labels * r_map + 10**(-7)
         labels.detach()
         # print(r_map)
