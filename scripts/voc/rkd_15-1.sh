@@ -8,17 +8,17 @@ START_DATE=$(date '+%Y-%m-%d')
 
 PORT=$((9000 + RANDOM % 1000))
 GPU=0,1
-NB_GPU=2
+NB_GPU=1
 
 
 DATA_ROOT=/media/Z/data/PascalVOC12
 
 DATASET=voc
 TASK=15-5s
-NAME=RKD_ENC
+NAME=RKD_TEST
 LOSS=1.0
 METHOD=PLOP
-OPTIONS="--checkpoint checkpoints/step/"
+OPTIONS="--checkpoint checkpoints/step/ --test"
 FIRSTMODEL=checkpoints/step/15-5s-voc_RKD_0.pth
 
 SCREENNAME="${DATASET}_${TASK}_${NAME} On GPUs ${GPU}"
@@ -39,12 +39,12 @@ echo "Writing in ${RESULTSFILE}"
 # And for the second step, this option:
 # --step_ckpt ${FIRSTMODEL}
 
-BATCH_SIZE=16
+BATCH_SIZE=1
 INITIAL_EPOCHS=30
 EPOCHS=30
 
-CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --ckpt ${FIRSTMODEL} --rebal_kd ${LOSS} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 0 --lr 0.01 --epochs ${INITIAL_EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS}
-CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --rebal_kd ${LOSS} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 1 --lr 0.001 --epochs ${EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS}
+#CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --ckpt ${FIRSTMODEL} --rebal_kd ${LOSS} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 0 --lr 0.01 --epochs ${INITIAL_EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS}
+#CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --rebal_kd ${LOSS} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 1 --lr 0.001 --epochs ${EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS}
 CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --rebal_kd ${LOSS} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 2 --lr 0.001 --epochs ${EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS}
 CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --rebal_kd ${LOSS} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 3 --lr 0.001 --epochs ${EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS}
 CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --rebal_kd ${LOSS} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 4 --lr 0.001 --epochs ${EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS}

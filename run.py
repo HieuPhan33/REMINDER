@@ -540,6 +540,7 @@ def run_step(opts, world_size, rank, device):
         sample_ids = np.arange(0,1000,10)
     else:
         sample_ids = None
+    sample_ids = ["2009_002171"]
 
     val_loss, val_score, ret_samples = trainer.validate(
         loader=test_loader, metrics=val_metrics, logger=logger, end_task=True, ret_samples_ids=sample_ids
@@ -551,8 +552,8 @@ def run_step(opts, world_size, rank, device):
         img = (denorm(img) * 255).transpose(1,2,0).astype(np.uint8)
         target = label2color(target).astype(np.uint8)
         lbl = label2color(lbl).astype(np.uint8)
-        train_dst.save_pred(target, sv_path=sv_dir, name=f'{name}_step{opts.step}', image=img)
-        train_dst.save_pred(lbl, sv_path=sv_dir, name=f'pred_{name}_step{opts.step}', image=img)
+        train_dst.save_pred(target, sv_path=sv_dir, name=f'{name}_step{opts.step}', image=None)
+        train_dst.save_pred(lbl, sv_path=sv_dir, name=f'pred_{name}_step{opts.step}', image=None)
         train_dst.save_pred(img, sv_path=sv_dir, name=f'img_{name}_step{opts.step}')
         #concat_img = np.concatenate((img, target, lbl), axis=2)  # concat along width
         #logger.add_image(f'Sample_{k}', concat_img, cur_epoch)
