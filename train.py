@@ -15,17 +15,17 @@ from utils.loss import (NCA, BCESigmoid, BCEWithLogitsLossWithIgnoreIndex,
                         FocalLossNew, IcarlLoss, KnowledgeDistillationLoss,
                         UnbiasedCrossEntropy,
                         UnbiasedKnowledgeDistillationLoss, UnbiasedNCA,
-                        soft_crossentropy, RebalanceKD, SoftContrastiveLoss)
+                        soft_crossentropy, ClassSimilarityWeightedKD, SoftContrastiveLoss)
 
 def compute_prototype(seg,features,classes):
     max_class = max(classes)
     out = torch.zeros((max_class+1,features.size(1))).to(seg.device)
     B,H,W = seg.shape
     features = F.interpolate(features, size=(H, W), mode='bilinear', align_corners=True)
-    seg_ = seg.view(-1)
-    features_ = features.transpose(1, 3).contiguous().view(B*H*W, -1)
+    seg = seg.view(-1)
+    features = features.transpose(1, 3).contiguous().view(B*H*W, -1)
     for c in classes:
-        selected_features = features_[seg_==c]
+        selected_features = features[seg==c]
         if len(selected_features) > 0:
             out[c] = selected_features.mean(dim=0)
     return out
@@ -93,13 +93,11 @@ class Trainer:
         self.lde_loss = nn.MSELoss()
 
         self.lkd = opts.loss_kd
-        self.rkd = opts.csw_kd
-        self.scl = opts.loss_sc
+        self.csw = opts.csw_kd
         self.lkd_mask = opts.kd_mask
         self.kd_mask_adaptative_factor = opts.kd_mask_adaptative_factor
         self.lkd_flag = self.lkd > 0. and model_old is not None
-        self.rkd_flag = self.rkd > 0. and model_old is not None
-        self.scl_flag = self.scl > 0.
+        self.csw_flag = self.csw > 0. and model_old is not None
         self.kd_need_labels = False
         if opts.unkd:
             self.lkd_loss = UnbiasedKnowledgeDistillationLoss(reduction="none", alpha=opts.alpha)
@@ -121,14 +119,10 @@ class Trainer:
                 temperature_semiold=opts.temperature_semiold
             )
             self.kd_need_labels = True
-        elif self.rkd > 0 and self.old_classes > 0 and self.step > 0:
-            self.rkd_loss = RebalanceKD(prototypes=prototypes)
+        elif self.csw > 0 and self.step > 0 and prototypes is not None:
+            self.csw_loss = ClassSimilarityWeightedKD(prototypes=prototypes, delta=opts.delta_csw)
         else:
             self.lkd_loss = KnowledgeDistillationLoss(alpha=opts.alpha)
-
-        if self.scl > 0:
-            self.soft_contrastive_loss = SoftContrastiveLoss()
-
         # ICARL
         self.icarl_combined = False
         self.icarl_only_dist = False
@@ -178,7 +172,6 @@ class Trainer:
         self.current_prototypes = torch.zeros((self.nb_current_classes, 256)).to(device)
         self.old_prototypes = prototypes
         self.proto_count = torch.zeros(self.nb_current_classes).to(device)
-        self.proto_update_iterations = 0
 
         self.align_weight = opts.align_weight
         self.align_weight_frequency = opts.align_weight_frequency
@@ -227,8 +220,7 @@ class Trainer:
         interval_loss = 0.0
         lkd = torch.tensor(0.)
         lde = torch.tensor(0.)
-        rkd = torch.tensor(0.)
-        scl = torch.tensor(0.)
+        csw = torch.tensor(0.)
         l_icarl = torch.tensor(0.)
         l_reg = torch.tensor(0.)
         pod_loss = torch.tensor(0.)
@@ -326,17 +318,6 @@ class Trainer:
 
             optim.zero_grad()
             outputs, features = model(images, ret_intermediate=self.ret_intermediate)
-
-
-            # exist_label = labels[labels != 255].unique()
-            # self.proto_update_iterations[exist_label] += 1
-            # pre_logits = features['pre_logits']
-            # cur_classes = list(range(self.old_classes, self.nb_current_classes))
-            # batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
-            # self.proto_update_iterations = self.proto_update_iterations.to(device)
-            # batch_size = images.size(0)
-            # self.current_prototypes = (1 / (batch_size * self.proto_update_iterations)).unsqueeze(1) * (
-            #         batch_size * (self.proto_update_iterations - 1).unsqueeze(1) * self.current_prototypes + batch_prototypes)
 
             # xxx BCE / Cross Entropy Loss
             if self.pseudo_soft is not None:
@@ -443,38 +424,18 @@ class Trainer:
                 if kd_mask is not None and self.kd_mask_adaptative_factor:
                     lkd = lkd.mean(dim=(1, 2)) * kd_mask.float().mean(dim=(1, 2))
                 lkd = torch.mean(lkd)
-            batch_prototypes = None
-            if self.scl_flag:
-                # # Update prototypes
+
+            if self.csw_flag:
                 pre_logits = features['pre_logits']
                 if 'cityscapes' in self.dataset:
                     cur_classes = list(range(self.nb_current_classes))
                 else:
                     cur_classes = list(range(self.old_classes, self.nb_current_classes))
-                batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
-                labels_downsample = F.interpolate(labels.unsqueeze(1).float(), size=(pre_logits.size(-2), pre_logits.size(-1)),
-                                                  mode='nearest').squeeze(1).long()
-                mask_fg = (labels_downsample.view(-1) < 255) & (labels_downsample.view(-1) >= self.old_classes)
-                scl_current = self.scl * self.soft_contrastive_loss(features=pre_logits, seg=labels_downsample, mask=mask_fg,
-                                                                    current_prototypes=batch_prototypes, ref_prototypes=batch_prototypes)
-                scl_prev = 0
-                if self.old_prototypes is not None:
-                    scl_prev = self.scl * self.soft_contrastive_loss(features=pre_logits, seg=labels, mask=mask_fg,
-                                                                        current_prototypes=batch_prototypes,
-                                                                     ref_prototypes=self.old_prototypes)
-                scl = scl_current + scl_prev
-            if self.rkd_flag:
-                if batch_prototypes is None:
-                    pre_logits = features['pre_logits']
-                    if 'cityscapes' in self.dataset:
-                        cur_classes = list(range(self.nb_current_classes))
-                    else:
-                        cur_classes = list(range(self.old_classes, self.nb_current_classes))
                     batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
                 mask_fg = (labels.view(-1) < 255) & (labels.view(-1) >= self.old_classes)
                 #mask_fg = (labels < 255) & (labels >= self.old_classes)
                 # Check class similarity
-                rkd = self.rkd * self.rkd_loss(outputs, outputs_old, batch_prototypes, seg=labels,
+                csw = self.csw * self.csw_loss(outputs, outputs_old, batch_prototypes, seg=labels,
                                                mask=mask_fg)
                                 
                                             
@@ -523,7 +484,7 @@ class Trainer:
                 lkd = lkd * math.sqrt(self.nb_current_classes / self.nb_new_classes)
 
             # xxx first backprop of previous loss (compute the gradients for regularization methods)
-            loss_tot = loss + lkd + lde + l_icarl + pod_loss + loss_entmin + rkd + scl
+            loss_tot = loss + lkd + lde + l_icarl + pod_loss + loss_entmin + csw
 
             with amp.scale_loss(loss_tot, optim) as scaled_loss:
                 scaled_loss.backward()
@@ -543,7 +504,7 @@ class Trainer:
 
             epoch_loss += loss.item()
             reg_loss += l_reg.item() if l_reg != 0. else 0.
-            reg_loss += lkd.item() + lde.item() + l_icarl.item() + rkd.item()
+            reg_loss += lkd.item() + lde.item() + l_icarl.item() + csw.item()
             interval_loss += loss.item() + lkd.item() + lde.item() + l_icarl.item() + pod_loss.item(
             ) + loss_entmin.item()
             interval_loss += l_reg.item() if l_reg != 0. else 0.
@@ -555,13 +516,12 @@ class Trainer:
                     f" Loss={interval_loss}"
                 )
                 logger.info(
-                    f"Loss made of: CE {loss}, LKD {lkd}, RKD {rkd}, SCL {scl}, LDE {lde}, LReg {l_reg}, POD {pod_loss} EntMin {loss_entmin}"
+                    f"Loss made of: CE {loss}, LKD {lkd}, CSW {csw}, LDE {lde}, LReg {l_reg}, POD {pod_loss} EntMin {loss_entmin}"
                 )
                 # visualization
                 if logger is not None:
                     x = cur_epoch * len(train_loader) + cur_step + 1
                     logger.add_scalar('Loss', interval_loss, x)
-                    logger.add_scalar('RKD', rkd, x)
                 interval_loss = 0.0
 
         # collect statistics from multiple processes
@@ -719,51 +679,25 @@ class Trainer:
                 labels = labels.to(device, dtype=torch.long)
 
                 if (
-                    self.lde_flag or self.lkd_flag or self.icarl_dist_flag or self.rkd_flag
+                    self.lde_flag or self.lkd_flag or self.icarl_dist_flag or self.csw_flag
                 ) and self.model_old is not None:
                     with torch.no_grad():
                         outputs_old, features_old = self.model_old(images, ret_intermediate=True)
 
                 outputs, features = model(images, ret_intermediate=True)
 
-                if self.rkd_flag:
-                    # # Update prototypes
-                    pre_logits = features['pre_logits']
-                    if 'cityscapes' in self.dataset:
-                        cur_classes = list(range(self.nb_current_classes))
-                    else:
-                        cur_classes = list(range(self.old_classes, self.nb_current_classes))
-                    batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
-                    mask_fg = (labels.view(-1) < 255) & (labels.view(-1) >= self.old_classes)
-                    classes = None
-                    # Check class similarity
-                    if self.dataset == 'ade':
-                        classes = [
-                            "void", "wall", "building", "sky", "floor", "tree", "ceiling", "road", "bed ", "windowpane",
-                            "grass", "cabinet", "sidewalk", "person", "earth", "door", "table", "mountain", "plant",
-                            "curtain", "chair", "car", "water", "painting", "sofa", "shelf", "house", "sea", "mirror",
-                            "rug", "field", "armchair", "seat", "fence", "desk", "rock", "wardrobe", "lamp", "bathtub",
-                            "railing", "cushion", "base", "box", "column", "signboard", "chest of drawers", "counter",
-                            "sand", "sink", "skyscraper", "fireplace", "refrigerator", "grandstand", "path", "stairs",
-                            "runway", "case", "pool table", "pillow", "screen door", "stairway", "river", "bridge",
-                            "bookcase", "blind", "coffee table", "toilet", "flower", "book", "hill", "bench",
-                            "countertop",
-                            "stove", "palm", "kitchen island", "computer", "swivel chair", "boat", "bar",
-                            "arcade machine",
-                            "hovel", "bus", "towel", "light", "truck", "tower", "chandelier", "awning", "streetlight",
-                            "booth", "television receiver", "airplane", "dirt track", "apparel", "pole", "land",
-                            "bannister", "escalator", "ottoman", "bottle", "buffet", "poster", "stage", "van", "ship",
-                            "fountain", "conveyer belt", "canopy", "washer", "plaything", "swimming pool", "stool",
-                            "barrel", "basket", "waterfall", "tent", "bag", "minibike", "cradle", "oven", "ball",
-                            "food",
-                            "step", "tank", "trade name", "microwave", "pot", "animal", "bicycle", "lake", "dishwasher",
-                            "screen", "blanket", "sculpture", "hood", "sconce", "vase", "traffic light", "tray",
-                            "ashcan",
-                            "fan", "pier", "crt screen", "plate", "monitor", "bulletin board", "shower", "radiator",
-                            "glass", "clock", "flag"
-                        ]
-                    _ = self.rkd * self.rkd_loss(outputs, outputs_old, batch_prototypes, seg=labels,
-                                                   mask=mask_fg, classes=classes)
+                # if self.csw_flag:
+                #     # # Update prototypes
+                #     pre_logits = features['pre_logits']
+                #     if 'cityscapes' in self.dataset:
+                #         cur_classes = list(range(self.nb_current_classes))
+                #     else:
+                #         cur_classes = list(range(self.old_classes, self.nb_current_classes))
+                #     batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
+                #     mask_fg = (labels.view(-1) < 255) & (labels.view(-1) >= self.old_classes)
+                #     # Check class similarity
+                #     _ = self.csw * self.csw_loss(outputs, outputs_old, batch_prototypes, seg=labels,
+                #                                    mask=mask_fg)
 
 
                 # xxx BCE / Cross Entropy Loss

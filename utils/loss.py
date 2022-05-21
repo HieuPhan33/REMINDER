@@ -275,7 +275,6 @@ def pairwise_cosine_sim(x,y):
     assert x_norm.device == y_norm.device, f"Device of x {x_norm.device} <> Device of y {y_norm.device}"
     res = torch.mm(x_norm, y_norm)
     res[torch.isnan(res)] = 0
-    #assert not torch.isnan(res).any(), f"Number of nan in output is {len(res[torch.isnan(res)])}/{len(res.view(-1))}"
     return res
 
 
@@ -324,16 +323,18 @@ class SoftContrastiveLoss(nn.Module):
         loss = loss_ce + self.l2_reg*l2_loss*0.25
         return loss
 
-class RebalanceKD(nn.Module):
-    def __init__(self,prototypes, temperature=3):
-        super(RebalanceKD, self).__init__()
+class ClassSimilarityWeightedKD(nn.Module):
+    def __init__(self,prototypes, temperature=3, delta=0.0):
+        super(ClassSimilarityWeightedKD, self).__init__()
         self.T = temperature
+        self.delta = delta
         assert not torch.isnan(prototypes).any(), "NaN in prototype"
         self.prototypes = prototypes # Size N_old * C, where N_old and C are n_classes and n_channels of feature map
         self.prototypes.detach()
 
-    def forward(self, preds_S, preds_T, batch_prototypes, seg, mask, classes=None):
+    def forward(self, preds_S, preds_T, batch_prototypes, seg, mask):
         '''
+
         :param preds_S: output of the student with size BxNxHxW
         :param preds_T: output of the teacher with size BxNxHxW
         :param batch_prototypes: prototypes of current classes with size N_new x C
@@ -343,118 +344,69 @@ class RebalanceKD(nn.Module):
         batch_prototypes.detach()
         preds_T.detach()
         preds_S = preds_S.narrow(1, 0, preds_T.shape[1])
-        if torch.isnan(batch_prototypes).any():
-            print("Some NaN")
-            return 0
-        #assert not torch.isnan(batch_prototypes).any(), "NaN in prototype"
+        assert not torch.isnan(batch_prototypes).any(), "NaN in prototype"
         assert preds_S[0].shape == preds_T[0].shape, 'the output dim of teacher and student differ'
-        B, N, H, W = preds_S.shape
+        B, _, H, W = preds_S.shape
         preds_S = preds_S.permute(0, 2, 3, 1).contiguous().view(B*H*W, -1)[mask] # T * N_old, where T=BxHxW
         preds_T = preds_T.permute(0, 2, 3, 1).contiguous().view(B*H*W, -1)[mask] # T * N_old
         seg = seg.view(B*H*W)[mask] # T
         T = seg.size(0)
-
-        # print(torch.unique(seg))
-        # print(torch.sum(batch_prototypes[:old_classes,:]))
-        #assert torch.all(seg >= old_classes)
-
         proto_by_label = batch_prototypes[seg] # T * C
         r_map = pairwise_cosine_sim(proto_by_label, self.prototypes.to(proto_by_label.device)) # T * N_old
-        r_map = F.softmax(r_map, dim=1)
-        # Print label:
-        # if classes is not None:
-        #     for i in range(500,T):
-        #         label = seg[i] != 0
-        #         if label.item():
-        #             break
-        #         label = seg[i].item()
-        #         print("Current class :", classes[label])
-        #         vals, sim_labels = torch.topk(r_map[i], k=10)
-        #         sim_labels = sim_labels.tolist()
-        #         sim_labels = [classes[l] for l in sim_labels]
-        #         print("Similar class: ", sim_labels)
-        #         print("Values ",vals.tolist())
+        r_map = F.softmax(r_map, dim=-1)
+        r_map[r_map < (self.delta/r_map.size(1))] = 0.0
 
-        #         _, dissim_labels = torch.topk(r_map[i],k=10,largest=False)
-        #         dissim_labels = dissim_labels.tolist()
-        #         dissim_labels = [classes[l] for l in dissim_labels]
-        #         print("Dissimilar class: ", dissim_labels)
-
-        th_scale = 1.0
-        r_map[r_map < (th_scale/r_map.size(1))] = 0.0
-        # print(r_map)
-        #print(torch.max(r_map), "-", torch.min(r_map))
         preds_S = F.log_softmax(preds_S / self.T, dim=1)
         preds_T = F.softmax(preds_T / self.T, dim=1)
-        preds_T = preds_T * r_map
-        #preds_T = r_map
+        preds_T = preds_T * r_map + 10 ** (-7)
         preds_T = torch.autograd.Variable(preds_T.data.cuda(), requires_grad=False)
         loss = self.T * self.T * torch.sum(-preds_T*preds_S)/T
-        # pred_T * (log pred_T - preds_S)
-        #print(loss)
         return loss
+        
 
-class NewRebalanceKD(nn.Module):
-    def __init__(self, prototypes, reduction='mean', alpha=1., kd_cil_weights=False):
-        super().__init__()
-        self.reduction = reduction
-        self.alpha = alpha
-        self.kd_cil_weights = kd_cil_weights
-        self.prototypes = prototypes  # Size N_old * C, where N_old and C are n_classes and n_channels of feature map
-        self.prototypes.detach()
+# class ClassSimilarityWeightedKD(nn.Module):
+#     def __init__(self,prototypes, temperature=3):
+#         super(ClassSimilarityWeightedKD, self).__init__()
+#         self.T = temperature
+#         assert not torch.isnan(prototypes).any(), "NaN in prototype"
+#         self.prototypes = prototypes # Size N_old * C, where N_old and C are n_classes and n_channels of feature map
+#         self.prototypes.detach()
 
-    def forward(self, inputs, targets, batch_prototypes, seg, mask=None, classes=None):
-        targets.detach()
-        batch_prototypes.detach()
-        inputs = inputs.narrow(1, 0, targets.shape[1])
-        B, H, W = seg.size()
-        proto_by_label = batch_prototypes[seg] # Size BxHxWxC
-        r_map = pairwise_cosine_sim(proto_by_label.view(B*H*W,-1), self.prototypes.to(proto_by_label.device))  # (B*H*W) * N_old
-        # Print label:
-        if classes is not None:
-            for i in range(500, 1000):
-                label = seg[i] != 0
-                if label.item():
-                    break
-            label = seg[i].item()
-            print("Current class :", classes[label])
-            vals, sim_labels = torch.topk(r_map[i], k=10)
-            sim_labels = sim_labels.tolist()
-            sim_labels = [classes[l] for l in sim_labels]
-            print("Similar class: ", sim_labels)
-            print("Values ", vals.tolist())
+#     def forward(self, preds_S, preds_T, batch_prototypes, seg, mask):
+#         '''
+#         :param preds_S: output of the student with size BxNxHxW
+#         :param preds_T: output of the teacher with size BxNxHxW
+#         :param batch_prototypes: prototypes of current classes with size N_new x C
+#         :param seg: segmentation map with size BxHxW
+#         :return:
+#         '''
+        # batch_prototypes.detach()
+        # preds_T.detach()
+        # preds_S = preds_S.narrow(1, 0, preds_T.shape[1])
+        # if torch.isnan(batch_prototypes).any():
+        #     return 0
+        # assert preds_S[0].shape == preds_T[0].shape, 'the output dim of teacher and student differ'
+        # B, _, H, W = preds_S.shape
+        # preds_S = preds_S.permute(0, 2, 3, 1).contiguous().view(B*H*W, -1)[mask] # T * N_old, where T=BxHxW
+        # preds_T = preds_T.permute(0, 2, 3, 1).contiguous().view(B*H*W, -1)[mask] # T * N_old
+        # seg = seg.view(B*H*W)[mask] # T
+        # T = seg.size(0)
 
-            _, dissim_labels = torch.topk(r_map[i], k=10, largest=False)
-            dissim_labels = dissim_labels.tolist()
-            dissim_labels = [classes[l] for l in dissim_labels]
-            print("Dissimilar class: ", dissim_labels)
 
-        r_map = r_map.contiguous().view(B, H, W, -1).permute(0, 3, 1, 2)
-        r_map = F.softmax(r_map, dim=1)
-        th_scale = 2.0
-        r_map[r_map < th_scale/(r_map.size(-1))] = 0
-        r_map.detach()
+        # proto_by_label = batch_prototypes[seg] # T * C
+        # r_map = pairwise_cosine_sim(proto_by_label, self.prototypes.to(proto_by_label.device)) # T * N_old
+        # r_map = F.softmax(r_map, dim=1)
 
-        outputs = torch.log_softmax(inputs, dim=1)
-        labels = torch.softmax(targets * self.alpha, dim=1)
-        labels = labels * r_map
+        # th_scale = 1.0
+        # r_map[r_map < (th_scale/r_map.size(1))] = 0.0
 
-        loss = (outputs * labels).mean(dim=1)
-        if self.kd_cil_weights:
-            w = -(torch.softmax(targets, dim=1) * torch.log_softmax(targets, dim=1)).sum(dim=1) + 1.0
-            loss = loss * w[:, None]
+        # preds_S = F.log_softmax(preds_S / self.T, dim=1)
+        # preds_T = F.softmax(preds_T / self.T, dim=1)
+        # preds_T = preds_T * r_map
+        # preds_T = torch.autograd.Variable(preds_T.data.cuda(), requires_grad=False)
+        # loss = self.T * self.T * torch.sum(-preds_T*preds_S)/T
 
-        if mask is not None:
-            loss = loss * mask.float()
-
-        if self.reduction == 'mean':
-            outputs = -torch.mean(loss)
-        elif self.reduction == 'sum':
-            outputs = -torch.sum(loss)
-        else:
-            outputs = -loss
-
-        return outputs
+        # return loss
 
 class KnowledgeDistillationLoss(nn.Module):
 

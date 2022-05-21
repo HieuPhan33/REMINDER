@@ -55,6 +55,16 @@ def modify_command_options(opts):
             opts.threshold = 0.001
             opts.classif_adaptive_factor = True
             opts.init_balanced = True
+        if opts.method == 'REMINDER':
+            opts.pod = "local"
+            opts.pod_factor = 0.01
+            opts.pod_logits = True
+            opts.pod_options = {"switch": {"after": {"extra_channels": "sum", "factor": 0.0005, "type": "local"}}}
+            opts.pseudo = "entropy"
+            opts.threshold = 0.001
+            opts.classif_adaptive_factor = True
+            opts.init_balanced = True
+            opts.csw_kd = 0.5
 
     opts.no_overlap = not opts.overlap
     opts.no_cross_val = not opts.cross_val
@@ -90,7 +100,7 @@ def get_argparser():
         "--method",
         type=str,
         default=None,
-        choices=['FT', 'LWF', 'LWF-MC', 'ILT', 'EWC', 'RW', 'PI', 'MiB', 'PLOP'],
+        choices=['FT', 'LWF', 'LWF-MC', 'ILT', 'EWC', 'RW', 'PI', 'MiB', 'PLOP', 'REMINDER'],
         help="The method you want to use. BE CAREFUL USING THIS, IT MAY OVERRIDE OTHER PARAMETERS."
     )
 
@@ -281,7 +291,14 @@ def get_argparser():
         type=float,
         default=0.,  # Distillation on Output
         help="Set this hyperparameter to a value greater than "
-             "0 to enable Rebalance Knowlesge Distillation (Soft-CrossEntropy)"
+             "0 to enable CSW Knowlesge Distillation"
+    )
+
+    parser.add_argument(
+        "--delta_csw",
+        type=float,
+        default=0.,  # Distillation on Output
+        help="Set this hyper-parameter to value greater than 0 to filter out unsimilar classes for CSW-KD"
     )
 
     parser.add_argument(
