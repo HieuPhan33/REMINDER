@@ -2,8 +2,8 @@
 
 # Class Similarity Weighted Knowledge Distillation for Continual Semantic Segmentation
 
-[![Paper](https://img.shields.io/badge/arXiv-2011.11390-brightgreen)](https://arxiv.org/abs/2011.11390)
-[![Conference](https://img.shields.io/badge/CVPR-2021-blue)](https://arxiv.org/abs/2011.11390)
+[![Paper](https://img.shields.io/badge/arXiv-2011.11390-brightgreen)]()
+[![Conference](https://img.shields.io/badge/CVPR-2021-blue)]()
 
 </div>
 
