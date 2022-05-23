@@ -51,7 +51,7 @@ Two scripts are available to download ADE20k and Pascal-VOC 2012, please see in 
 For Cityscapes, you need to do it yourself, because you have to ask "permission" to the holders; but be
 reassured, it's only a formality, you can get the link in a few days by mail.
 
-![Performance on VOC and ADE](images/voc_ade.png)
+![Performance on VOC and ADE](images/results.png)
 
 
 # How to perform training
