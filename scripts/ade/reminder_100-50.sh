@@ -6,8 +6,8 @@ start=`date +%s`
 START_DATE=$(date '+%Y-%m-%d')
 
 PORT=$((9000 + RANDOM % 1000))
-GPU=0,1
-NB_GPU=2
+GPU=0
+NB_GPU=1
 
 DATA_ROOT=/media/hieu/DATA/semantic_segmentation
 
@@ -19,6 +19,7 @@ METHOD=FT
 LOSS=0.5
 EPOCHS=70
 OPTIONS="--checkpoint checkpoints --pod local --pod_factor 0.001 --pod_logits --pseudo entropy --threshold 0.001 --classif_adaptive_factor --init_balanced --csw_kd ${LOSS} --delta_csw 1.0"
+FIRSTMODEL=checkpoints/ade/100-10-ade_RKD_0.pth
 
 SCREENNAME="${DATASET}_${TASK}_${NAME} On GPUs ${GPU}"
 
@@ -38,8 +39,8 @@ echo "Writing in ${RESULTSFILE}"
 # And for the second step, this option:
 # --step_ckpt ${FIRSTMODEL}
 
-CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size 12 --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 0 --lr 0.01 --epochs ${EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS}
-CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --step_ckpt checkpoints/ade/100-10-ade_RKD_0.pth --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 1 --lr 0.0008 --epochs ${EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS} --pod_options "{\"switch\": {\"after\": {\"extra_channels\": \"sum\", \"factor\": 0.00001, \"type\": \"local\"}}}"
+CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --ckpt ${FIRSTMODEL} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size 12 --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 0 --lr 0.01 --epochs 60 --method ${METHOD} --opt_level O1 ${OPTIONS}
+CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --step_ckpt ${FIRSTMODEL} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 1 --lr 0.0008 --epochs ${EPOCHS} --method ${METHOD} --opt_level O1 ${OPTIONS} --pod_options "{\"switch\": {\"after\": {\"extra_channels\": \"sum\", \"factor\": 0.00001, \"type\": \"local\"}}}"
 python3 average_csv.py ${RESULTSFILE}
 
 echo ${SCREENNAME}
