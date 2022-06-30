@@ -110,4 +110,4 @@ For example, do
 bash scripts/voc/reminder_15-1.sh
 ````
 
-Note that you will need to modify those scripts to include the path where your data.
+Note that you will need to modify those scripts to include the path to your data folder.
