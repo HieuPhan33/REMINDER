@@ -62,7 +62,7 @@ To run it, simpy use the following command:
 
 The default is to use a pretraining for the backbone used, that is searched in the pretrained folder of the project.
 We used the pretrained model released by the authors of In-place ABN (as said in the paper), that can be found here:
- [link](https://github.com/mapillary/inplace_abn#training-on-imagenet-1k). I've also upload those weights there: [link](https://github.com/arthurdouillard/CVPR2021_PLOP/releases/download/v1.0/resnet101_iabn_sync.pth.tar).
+ [link](https://github.com/mapillary/inplace_abn#training-on-imagenet-1k).
 
 Since the pretrained are made on multiple-gpus, they contain a prefix "module." in each key of the network. Please, be sure to remove them to be compatible with this code (simply rename them using key = key\[7:\]) (if you're working on single gpu).
 If you don't want to use pretrained, please use --no-pretrained.
@@ -94,8 +94,8 @@ MIB on the 50b setting of ADE20K, step 2:
 PLOP on 15-1 overlapped setting of VOC, step 1:
 > python -m torch.distributed.launch --nproc_per_node=2 run.py --data_root data --batch_size 16 --dataset voc --name PLOP --task 15-5s --overlapped --step 1 --lr 0.001 --epochs 30 --method PLOP
 
-PLOP on 15-1 overlapped setting of REMINDER, step 1:
-> python -m torch.distributed.launch --nproc_per_node=2 run.py --data_root data --batch_size 16 --dataset voc --name PLOP --task 15-5s --overlapped --step 1 --lr 0.001 --epochs 30 --method REMINDER
+REMINDER on 15-1 overlapped setting of REMINDER, step 1:
+> python -m torch.distributed.launch --nproc_per_node=2 run.py --data_root data --batch_size 16 --dataset voc --name REMINDER --task 15-5s --overlapped --step 1 --lr 0.001 --epochs 30 --method REMINDER
 
 Once you trained the model, you can see the result on tensorboard (we perform the test after the whole training)
  or you can test it by using the same script and parameters but using the command
