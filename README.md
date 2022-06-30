@@ -2,8 +2,7 @@
 
 # Class Similarity Weighted Knowledge Distillation for Continual Semantic Segmentation
 
-[![Paper](https://img.shields.io/badge/arXiv-2011.11390-brightgreen)](https://openaccess.thecvf.com/content/CVPR2022/papers/Phan_Class_Similarity_Weighted_Knowledge_Distillation_for_Continual_Semantic_Segmentation_CVPR_2022_paper.pdf)
-[![Conference](https://img.shields.io/badge/CVPR-2021-blue)](https://openaccess.thecvf.com/content/CVPR2022/papers/Phan_Class_Similarity_Weighted_Knowledge_Distillation_for_Continual_Semantic_Segmentation_CVPR_2022_paper.pdf)
+[![Conference](https://img.shields.io/badge/CVPR-2022-blue)](https://openaccess.thecvf.com/content/CVPR2022/papers/Phan_Class_Similarity_Weighted_Knowledge_Distillation_for_Continual_Semantic_Segmentation_CVPR_2022_paper.pdf)
 
 </div>
 
