@@ -79,7 +79,7 @@ Leaving all the default parameters, you can replicate the experiments by setting
 - batch size: --batch_size \<24/num_GPUs\>
 - epochs: --epochs 30 (Pascal-VOC 2012) | 60 (ADE20K)
 - method: --method \<method name\>, where names are
-    - FT, LWF, LWF-MC, ILT, EWC, RW, PI, MIB
+    - FT, LWF, LWF-MC, ILT, EWC, RW, PI, MIB, REMINDER
 
 For all details please follow the information provided using the help option.
 
