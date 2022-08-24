@@ -1,15 +1,14 @@
 <div align="center">
 
-# PLOP: Learning without Forgetting for Continual Semantic Segmentation
+# Class Similarity Weighted Knowledge Distillation for Continual Semantic Segmentation
 
-[![Paper](https://img.shields.io/badge/arXiv-2011.11390-brightgreen)](https://arxiv.org/abs/2011.11390)
-[![Conference](https://img.shields.io/badge/CVPR-2021-blue)](https://arxiv.org/abs/2011.11390)
-[![Youtube](https://img.shields.io/badge/Youtube-link-red)](https://youtu.be/GmnglAsraAM?t=2562)
+[![Conference](https://img.shields.io/badge/CVPR-2022-blue)](https://openaccess.thecvf.com/content/CVPR2022/papers/Phan_Class_Similarity_Weighted_Knowledge_Distillation_for_Continual_Semantic_Segmentation_CVPR_2022_paper.pdf)
+[![Youtube](https://img.shields.io/badge/Youtube-link-red)](https://www.youtube.com/watch?v=QIV9gQq5VdE&t=14s)
 
 </div>
 
 
-![Vizualization on VOC 15-1](images/plop_viz.png)
+![Vizualization on VOC 15-1](images/visualization_results.png)
 
 
 This repository contains all of our code. It is a modified version of
@@ -18,10 +17,10 @@ This repository contains all of our code. It is a modified version of
 
 ```
 @inproceedings{douillard2021plop,
-  title={PLOP: Learning without Forgetting for Continual Semantic Segmentation},
-  authors={Douillard, Arthur and Chen, Yifu and Dapogny, Arnaud and Cord, Matthieu},
-  booktitle={Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
-  year={2021}
+  title={Class Similarity Weighted Knowledge Distillation for Continual Semantic Segmentation},
+  authors={Phan, Minh Hieu and Ta, The-Anh and Phung, Son Lam and Tran-Thanh, Long and Bouzerdoum, Abdesselam},
+  booktitle={IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year={2022}
 }
 ```
 
@@ -52,7 +51,7 @@ Two scripts are available to download ADE20k and Pascal-VOC 2012, please see in 
 For Cityscapes, you need to do it yourself, because you have to ask "permission" to the holders; but be
 reassured, it's only a formality, you can get the link in a few days by mail.
 
-![Performance on VOC](images/plop_voc.png)
+![Performance on VOC and ADE](images/results.png)
 
 
 # How to perform training
@@ -63,7 +62,7 @@ To run it, simpy use the following command:
 
 The default is to use a pretraining for the backbone used, that is searched in the pretrained folder of the project.
 We used the pretrained model released by the authors of In-place ABN (as said in the paper), that can be found here:
- [link](https://github.com/mapillary/inplace_abn#training-on-imagenet-1k). I've also upload those weights there: [link](https://github.com/arthurdouillard/CVPR2021_PLOP/releases/download/v1.0/resnet101_iabn_sync.pth.tar).
+ [link](https://github.com/mapillary/inplace_abn#training-on-imagenet-1k).
 
 Since the pretrained are made on multiple-gpus, they contain a prefix "module." in each key of the network. Please, be sure to remove them to be compatible with this code (simply rename them using key = key\[7:\]) (if you're working on single gpu).
 If you don't want to use pretrained, please use --no-pretrained.
@@ -80,7 +79,7 @@ Leaving all the default parameters, you can replicate the experiments by setting
 - batch size: --batch_size \<24/num_GPUs\>
 - epochs: --epochs 30 (Pascal-VOC 2012) | 60 (ADE20K)
 - method: --method \<method name\>, where names are
-    - FT, LWF, LWF-MC, ILT, EWC, RW, PI, MIB
+    - FT, LWF, LWF-MC, ILT, EWC, RW, PI, MIB, REMINDER
 
 For all details please follow the information provided using the help option.
 
@@ -92,12 +91,11 @@ LwF on the 100-50 setting of ADE20K, step 0:
 MIB on the 50b setting of ADE20K, step 2:
 > python -m torch.distributed.launch --nproc_per_node=2 run.py --data_root data --batch_size 12 --dataset ade --name MIB --task 100-50 --step 2 --lr 0.001 --epochs 60 --method MIB
 
-LWF-MC on 15-5 disjoint setting of VOC, step 1:
-> python -m torch.distributed.launch --nproc_per_node=2 run.py --data_root data --batch_size 12 --dataset voc --name LWF-MC --task 15-5 --step 1 --lr 0.001 --epochs 30 --method LWF-MC
-
 PLOP on 15-1 overlapped setting of VOC, step 1:
-> python -m torch.distributed.launch --nproc_per_node=2 run.py --data_root data --batch_size 12 --dataset voc --name PLOP --task 15-5s --overlapped --step 1 --lr 0.001 --epochs 30 --method FT --pod local --pod_factor 0.01 --pod_logits --pseudo entropy --threshold 0.001 --classif_adaptive_factor --init_balanced --pod_options "{\"switch\": {\"after\": {\"extra_channels\": \"sum\", \"factor\": 0.0005, \"type\": \"local\"}}}"
+> python -m torch.distributed.launch --nproc_per_node=2 run.py --data_root data --batch_size 16 --dataset voc --name PLOP --task 15-5s --overlapped --step 1 --lr 0.001 --epochs 30 --method PLOP
 
+REMINDER on 15-1 overlapped setting of REMINDER, step 1:
+> python -m torch.distributed.launch --nproc_per_node=2 run.py --data_root data --batch_size 16 --dataset voc --name REMINDER --task 15-5s --overlapped --step 1 --lr 0.001 --epochs 30 --method REMINDER
 
 Once you trained the model, you can see the result on tensorboard (we perform the test after the whole training)
  or you can test it by using the same script and parameters but using the command
@@ -110,7 +108,7 @@ Or more simply you can use one of the provided script that will launch every ste
 For example, do
 
 ````
-bash scripts/voc/plop_15-1.sh
+bash scripts/voc/reminder_15-1.sh
 ````
 
-Note that you will need to modify those scripts to include the path where your data.
+Note that you will need to modify those scripts to include the path to your data folder.
