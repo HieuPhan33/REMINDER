@@ -20,7 +20,7 @@ EPOCHS=60
 METHOD=FT
 LOSS=0.5
 LR=0.0008
-OPTIONS="--checkpoint checkpoints/step/ --pod local --pod_factor 0.001 --pod_logits --pseudo entropy --threshold 0.001 --classif_adaptive_factor --init_balanced --rebal_kd ${LOSS}"
+OPTIONS="--checkpoint checkpoints/step/ --pod local --pod_factor 0.001 --pod_logits --pseudo entropy --threshold 0.001 --classif_adaptive_factor --init_balanced --ClassSimilarityWeightedKD ${LOSS}"
 
 SCREENNAME="${DATASET}_${TASK}_${NAME} On GPUs ${GPU}"
 

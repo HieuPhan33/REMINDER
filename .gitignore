@@ -8,3 +8,5 @@ results
 logs
 scripts/cityscapesDomain/reminder_11-5.sh
 __pycache__
+*rkd*.sh
+*save*.sh

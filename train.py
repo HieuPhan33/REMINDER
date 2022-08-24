@@ -15,13 +15,12 @@ from utils.loss import (NCA, BCESigmoid, BCEWithLogitsLossWithIgnoreIndex,
                         FocalLossNew, IcarlLoss, KnowledgeDistillationLoss,
                         UnbiasedCrossEntropy,
                         UnbiasedKnowledgeDistillationLoss, UnbiasedNCA,
-                        soft_crossentropy, RebalanceKD, SoftContrastiveLoss)
+                        soft_crossentropy, ClassSimilarityWeightedKD, SoftContrastiveLoss)
 
 def compute_prototype(seg,features,classes):
     max_class = max(classes)
     out = torch.zeros((max_class+1,features.size(1))).to(seg.device)
     B,H,W = seg.shape
-    #seg = F.interpolate(seg.unsqueeze(1).float(), size=(H,W), mode='nearest').squeeze(1).long()
     features = F.interpolate(features, size=(H, W), mode='bilinear', align_corners=True)
     seg = seg.view(-1)
     features = features.transpose(1, 3).contiguous().view(B*H*W, -1)
@@ -39,13 +38,9 @@ class Trainer:
         self.model = model
         self.device = device
         self.step = step
-        self.old_prototypes = prototypes
-        # if prototypes is None:
-        #     self.old_prototypes = self.old_prototypes.to(device)
 
         if opts.dataset == "cityscapes_domain":
-            #self.old_classes = opts.num_classes
-            self.old_classes = 0
+            self.old_classes = opts.num_classes
             self.nb_classes = opts.num_classes
             self.nb_current_classes = opts.num_classes
             self.nb_new_classes = opts.num_classes
@@ -98,13 +93,11 @@ class Trainer:
         self.lde_loss = nn.MSELoss()
 
         self.lkd = opts.loss_kd
-        self.rkd = opts.rebal_kd
-        self.scl = opts.scl
+        self.csw = opts.csw_kd
         self.lkd_mask = opts.kd_mask
         self.kd_mask_adaptative_factor = opts.kd_mask_adaptative_factor
         self.lkd_flag = self.lkd > 0. and model_old is not None
-        self.rkd_flag = self.rkd > 0. and model_old is not None
-        self.scl_flag = self.scl > 0. and model_old is not None
+        self.csw_flag = self.csw > 0. and model_old is not None
         self.kd_need_labels = False
         if opts.unkd:
             self.lkd_loss = UnbiasedKnowledgeDistillationLoss(reduction="none", alpha=opts.alpha)
@@ -124,15 +117,12 @@ class Trainer:
                 temperature_semiold=opts.temperature_semiold
             )
             self.kd_need_labels = True
+        elif self.csw > 0 and self.step > 0 and prototypes is not None:
+            self.csw_loss = ClassSimilarityWeightedKD(prototypes=prototypes, delta=opts.delta_csw)
         else:
             self.lkd_loss = KnowledgeDistillationLoss(alpha=opts.alpha)
 
-        # if self.rkd > 0 and self.old_classes > 0 and self.step > 0 and prototypes is not None:
-        #     self.rkd_loss = RebalanceKD(prototypes=prototypes)
-
-        if self.rkd > 0 and self.step > 0 and prototypes is not None:
-            self.rkd_loss = RebalanceKD(prototypes=prototypes)
-
+        
         # ICARL
         self.icarl_combined = False
         self.icarl_only_dist = False
@@ -179,9 +169,9 @@ class Trainer:
         self.spp_scales = opts.spp_scales
         self.pod_logits = opts.pod_logits
         self.pod_large_logits = opts.pod_large_logits
-        #self.current_prototypes = 0
+
         self.current_prototypes = torch.zeros((self.nb_current_classes, 256)).to(device)
-        self.proto_update_iterations = 0
+        self.old_prototypes = prototypes
         self.proto_count = torch.zeros(self.nb_current_classes).to(device)
 
         self.align_weight = opts.align_weight
@@ -231,8 +221,7 @@ class Trainer:
         interval_loss = 0.0
         lkd = torch.tensor(0.)
         lde = torch.tensor(0.)
-        rkd = torch.tensor(0.)
-        scl = torch.tensor(0.)
+        csw = torch.tensor(0.)
         l_icarl = torch.tensor(0.)
         l_reg = torch.tensor(0.)
         pod_loss = torch.tensor(0.)
@@ -331,13 +320,6 @@ class Trainer:
             optim.zero_grad()
             outputs, features = model(images, ret_intermediate=self.ret_intermediate)
 
-            # Update prototypes
-            if self.rkd_flag:
-                pre_logits = features['pre_logits']
-
-                cur_classes = list(range(self.old_classes, self.nb_current_classes))
-                batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
-
             # xxx BCE / Cross Entropy Loss
             if self.pseudo_soft is not None:
                 loss = soft_crossentropy(
@@ -406,7 +388,7 @@ class Trainer:
             if self.lkd_flag:
                 # resize new output to remove new logits and keep only the old ones
                 if self.lkd_mask is not None and self.lkd_mask == "oldbackground":
-                    kd_mask = (labels < self.old_classes) & (labels != 0)
+                    kd_mask = labels < self.old_classes
                 elif self.lkd_mask is not None and self.lkd_mask == "new":
                     kd_mask = labels >= self.old_classes
                 else:
@@ -444,9 +426,17 @@ class Trainer:
                     lkd = lkd.mean(dim=(1, 2)) * kd_mask.float().mean(dim=(1, 2))
                 lkd = torch.mean(lkd)
 
-            if self.rkd_flag:
+            if self.csw_flag:
+                pre_logits = features['pre_logits']
+                if 'cityscapes' in self.dataset:
+                    cur_classes = list(range(self.nb_current_classes))
+                else:
+                    cur_classes = list(range(self.old_classes, self.nb_current_classes))
+                    batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
                 mask_fg = (labels.view(-1) < 255) & (labels.view(-1) >= self.old_classes)
-                rkd = self.rkd * self.rkd_loss(outputs, outputs_old, batch_prototypes, seg=labels,
+                #mask_fg = (labels < 255) & (labels >= self.old_classes)
+                # Check class similarity
+                csw = self.csw * self.csw_loss(outputs, outputs_old, batch_prototypes, seg=labels,
                                                mask=mask_fg)
 
 
@@ -493,7 +483,7 @@ class Trainer:
                 lkd = lkd * math.sqrt(self.nb_current_classes / self.nb_new_classes)
 
             # xxx first backprop of previous loss (compute the gradients for regularization methods)
-            loss_tot = loss + lkd + lde + l_icarl + pod_loss + loss_entmin + rkd +scl
+            loss_tot = loss + lkd + lde + l_icarl + pod_loss + loss_entmin + csw
 
             with amp.scale_loss(loss_tot, optim) as scaled_loss:
                 scaled_loss.backward()
@@ -513,7 +503,7 @@ class Trainer:
 
             epoch_loss += loss.item()
             reg_loss += l_reg.item() if l_reg != 0. else 0.
-            reg_loss += lkd.item() + lde.item() + l_icarl.item() + rkd.item()
+            reg_loss += lkd.item() + lde.item() + l_icarl.item() + csw.item()
             interval_loss += loss.item() + lkd.item() + lde.item() + l_icarl.item() + pod_loss.item(
             ) + loss_entmin.item()
             interval_loss += l_reg.item() if l_reg != 0. else 0.
@@ -525,13 +515,12 @@ class Trainer:
                     f" Loss={interval_loss}"
                 )
                 logger.info(
-                    f"Loss made of: CE {loss}, LKD {lkd}, RKD {rkd}, SCL {scl}, LDE {lde}, LReg {l_reg}, POD {pod_loss} EntMin {loss_entmin}"
+                    f"Loss made of: CE {loss}, LKD {lkd}, csw {csw}, LDE {lde}, LReg {l_reg}, POD {pod_loss} EntMin {loss_entmin}"
                 )
                 # visualization
                 if logger is not None:
                     x = cur_epoch * len(train_loader) + cur_step + 1
                     logger.add_scalar('Loss', interval_loss, x)
-                    logger.add_scalar('RKD', rkd, x)
                 interval_loss = 0.0
 
         # collect statistics from multiple processes
@@ -548,24 +537,6 @@ class Trainer:
         logger.info(f"Epoch {cur_epoch}, Class Loss={epoch_loss}, Reg Loss={reg_loss}")
 
         return (epoch_loss, reg_loss)
-
-    def update_prototypes(self, train_loader):
-        device = self.device
-        with torch.no_grad():
-            for cur_step, (images, labels, _) in enumerate(train_loader):
-                images = images.to(device, dtype=torch.float32)
-                labels = labels.to(device, dtype=torch.long)
-                _, features = self.model(images, ret_intermediate=True)
-                exist_label = labels[labels != 255].unique()
-                pre_logits = features['pre_logits']
-                cur_classes = list(range(self.old_classes, self.nb_current_classes))
-                batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
-
-                self.proto_count[exist_label] += 1
-                #self.proto_count = self.proto_count.to(device)
-                #batch_size = images.size(0)
-                self.current_prototypes[exist_label] = (1 / self.proto_count[exist_label]).unsqueeze(1) * (
-                        (self.proto_count[exist_label] - 1).unsqueeze(1) * self.current_prototypes[exist_label] + batch_prototypes[exist_label])
 
     def find_median(self, train_loader, device, logger, mode="probability"):
         """Find the median prediction score per class with the old model.
@@ -653,6 +624,25 @@ class Trainer:
         logger.info(f"Finished computing median {thresholds}")
         return thresholds.to(device), max_value
 
+    def update_prototypes(self, train_loader):
+        device = self.device
+        with torch.no_grad():
+            for cur_step, (images, labels, _) in enumerate(train_loader):
+                images = images.to(device, dtype=torch.float32)
+                labels = labels.to(device, dtype=torch.long)
+                _, features = self.model(images, ret_intermediate=True)
+                exist_label = labels[labels != 255].unique()
+                pre_logits = features['pre_logits']
+                cur_classes = list(range(self.old_classes, self.nb_current_classes))
+                batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
+
+                self.proto_count[exist_label] += 1
+                #self.proto_count = self.proto_count.to(device)
+                #batch_size = images.size(0)
+                self.current_prototypes[exist_label] = (1 / self.proto_count[exist_label]).unsqueeze(1) * (
+                        (self.proto_count[exist_label] - 1).unsqueeze(1) * self.current_prototypes[exist_label] + batch_prototypes[exist_label])
+
+
     def validate(self, loader, metrics, ret_samples_ids=None, logger=None, end_task=False):
         """Do validation and return specified samples"""
         metrics.reset()
@@ -684,35 +674,12 @@ class Trainer:
                 labels = labels.to(device, dtype=torch.long)
 
                 if (
-                    self.lde_flag or self.lkd_flag or self.icarl_dist_flag
+                    self.lde_flag or self.lkd_flag or self.icarl_dist_flag or self.csw_flag
                 ) and self.model_old is not None:
                     with torch.no_grad():
                         outputs_old, features_old = self.model_old(images, ret_intermediate=True)
 
                 outputs, features = model(images, ret_intermediate=True)
-
-                # # Update prototypes
-                # if not end_task:
-                #     self.proto_update_iterations += 1
-                #     pre_logits = features['pre_logits']
-                #     cur_classes = list(range(self.old_classes, self.nb_current_classes))
-                #     batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
-                #     batch_size = images.size(0)
-                #     self.current_prototypes = (1 / (batch_size * self.proto_update_iterations)) * (
-                #             batch_size * (self.proto_update_iterations - 1) * self.current_prototypes + batch_prototypes)
-
-                # if not end_task:
-                #     exist_label = labels[labels != 255].unique()
-                #     pre_logits = features['pre_logits']
-                #     cur_classes = list(range(self.old_classes, self.nb_current_classes))
-                #     batch_prototypes = compute_prototype(labels, pre_logits, cur_classes)
-
-                #     self.proto_count[exist_label] += 1
-                #     # self.proto_count = self.proto_count.to(device)
-                #     batch_size = images.size(0)
-                #     self.current_prototypes[exist_label] = (1 / (batch_size * self.proto_count[exist_label])).unsqueeze(1) * (
-                #             batch_size * (self.proto_count[exist_label] - 1).unsqueeze(1) * self.current_prototypes[exist_label] +
-                #             batch_prototypes[exist_label])
 
                 # xxx BCE / Cross Entropy Loss
                 if not self.icarl_only_dist:

@@ -337,7 +337,7 @@ def run_step(opts, world_size, rank, device):
             raise FileNotFoundError(path)
 
         # Load previous prototypes
-        if opts.rebal_kd > 0:
+        if opts.csw_kd > 0:
             prototypes = torch.load(f"{opts.checkpoint}/{task_name}_{opts.name}_prototypes_{opts.step-1}.pth")
             logger.info(f"[!] Previous prototypes loaded from {opts.checkpoint}/{task_name}_{opts.name}_prototypes_{opts.step-1}.pth")
         # put the old model into distributed memory and freeze it
@@ -558,7 +558,7 @@ def run_step(opts, world_size, rank, device):
         #concat_img = np.concatenate((img, target, lbl), axis=2)  # concat along width
         #logger.add_image(f'Sample_{k}', concat_img, cur_epoch)
 
-    if opts.rebal_kd > 0:
+    if opts.csw_kd > 0:
         trainer.update_prototypes(train_loader=train_loader)
         new_prototypes = trainer.current_prototypes
         if opts.step > 0:
