@@ -101,7 +101,7 @@ def get_argparser():
         "--method",
         type=str,
         default=None,
-        choices=['FT', 'LWF', 'LWF-MC', 'ILT', 'EWC', 'RW', 'PI', 'MiB', 'PLOP', 'RKD'],
+        choices=['FT', 'LWF', 'LWF-MC', 'ILT', 'EWC', 'RW', 'PI', 'MiB', 'PLOP', 'REMINDER'],
         help="The method you want to use. BE CAREFUL USING THIS, IT MAY OVERRIDE OTHER PARAMETERS."
     )
 
