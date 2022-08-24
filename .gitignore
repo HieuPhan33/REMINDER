@@ -9,4 +9,9 @@ logs
 scripts/cityscapesDomain/reminder_11-5.sh
 __pycache__
 *rkd*.sh
-scripts/*_save*.sh
+scripts/voc/rkd_save_features_15-5.sh
+scripts/voc/rkd_valid_15-1.sh
+scripts/voc/rkd_valid_15-5.sh
+scripts/voc/plop_save_features_15-5.sh
+scripts/voc/ft_save_features_15-5.sh
+scripts/voc/plop_valid_15-1.sh
