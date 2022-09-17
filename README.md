@@ -16,7 +16,7 @@ This repository contains all of our code. It is a modified version of
 
 
 ```
-@inproceedings{douillard2021plop,
+@inproceedings{phan2022reminder,
   title={Class Similarity Weighted Knowledge Distillation for Continual Semantic Segmentation},
   authors={Phan, Minh Hieu and Ta, The-Anh and Phung, Son Lam and Tran-Thanh, Long and Bouzerdoum, Abdesselam},
   booktitle={IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
