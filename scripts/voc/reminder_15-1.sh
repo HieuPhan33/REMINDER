@@ -11,7 +11,7 @@ GPU=0,1
 NB_GPU=2
 
 
-DATA_ROOT=/media/hieu/DATA/semantic_segmentation/PascalVOC12
+DATA_ROOT=~/data/PascalVOC12
 
 DATASET=voc
 TASK=15-5s
