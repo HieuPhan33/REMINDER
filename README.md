@@ -46,7 +46,7 @@ pip3 install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cu
 ```
 
 ## Update on Table 5 in our CVPR paper
-We find out more optimal set of hyper-parameters when doing ablation study on distillation loss. Please refer to the updated version below:
+We find out more optimal set of hyper-parameters when doing ablation study on distillation loss. The updated version of Table 5 is shown below 
 
 |   Distillation loss  | 0-15 | 16-20 |  all |
 |-----|:------:|:-------:|:------:|
