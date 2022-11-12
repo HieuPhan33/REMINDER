@@ -15,15 +15,6 @@ This repository contains all of our code. It is a modified version of
 [Cermelli et al.'s repository](https://github.com/fcdl94/MiB).
 
 
-```
-@inproceedings{phan2022reminder,
-  title={Class Similarity Weighted Knowledge Distillation for Continual Semantic Segmentation},
-  authors={Phan, Minh Hieu and Ta, The-Anh and Phung, Son Lam and Tran-Thanh, Long and Bouzerdoum, Abdesselam},
-  booktitle={IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
-  year={2022}
-}
-```
-
 # Requirements
 
 You need to install the following libraries:
@@ -45,14 +36,6 @@ cd apex
 pip3 install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 ```
 
-## Update on Table 5 in our CVPR paper
-We find out more optimal set of hyper-parameters when doing ablation study on distillation loss. The updated version of Table 5 is shown below 
-
-|   Distillation loss  | 0-15 | 16-20 |  all |
-|-----|:------:|:-------:|:------:|
-| CSW-KD   | 68.30 | 27.23 | 58.52 |
-| Normal KD| 59.88 | 25.43 | 51.68 |
-| UNKD | 65.09 | 21.53 | 54.72 |
 
 # Dataset
 
@@ -121,3 +104,21 @@ bash scripts/voc/reminder_15-1.sh
 ````
 
 Note that you will need to modify those scripts to include the path to your data folder.
+
+## Update on Table 5 in our CVPR paper
+We find out more a more optimal set of hyper-parameters when doing ablation study on distillation loss. The updated version of Table 5 is shown below 
+
+|   Distillation loss  | 0-15 | 16-20 |  all |
+|-----|:------:|:-------:|:------:|
+| CSW-KD   | 68.30 | 27.23 | 58.52 |
+| Normal KD| 59.88 | 25.43 | 51.68 |
+| UNKD | 65.09 | 21.53 | 54.72 |
+
+```
+@inproceedings{phan2022reminder,
+  title={Class Similarity Weighted Knowledge Distillation for Continual Semantic Segmentation},
+  authors={Phan, Minh Hieu and Ta, The-Anh and Phung, Son Lam and Tran-Thanh, Long and Bouzerdoum, Abdesselam},
+  booktitle={IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year={2022}
+}
+```
