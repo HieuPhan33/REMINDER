@@ -45,6 +45,15 @@ cd apex
 pip3 install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 ```
 
+## Update on Table 5 in our CVPR paper
+We find out more optimal set of hyper-parameters when doing ablation study on distillation loss. Please refer to the updated version below:
+
+|   Distillation loss  | 0-15 | 16-20 |  all |
+|-----|:------:|:-------:|:------:|
+| CSW-KD   | 68.30 | 27.23 | 58.52 |
+| Normal KD| 59.88 | 25.43 | 51.68 |
+| UNKD | 65.09 | 21.53 | 54.72 |
+
 # Dataset
 
 Two scripts are available to download ADE20k and Pascal-VOC 2012, please see in the `data` folder.
