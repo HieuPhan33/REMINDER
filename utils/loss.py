@@ -277,10 +277,11 @@ def pairwise_cosine_sim(x,y):
     assert not torch.isnan(res).any(), f"Number of nan in output is {len(res[torch.isnan(res)])}"
     return res
 
-class RebalanceKD(nn.Module):
-    def __init__(self,prototypes, temperature=3):
-        super(RebalanceKD, self).__init__()
+class ClassSimilarityWeightedKD(nn.Module):
+    def __init__(self,prototypes, temperature=3, delta=0.0):
+        super(ClassSimilarityWeightedKD, self).__init__()
         self.T = temperature
+        self.delta = delta
         assert not torch.isnan(prototypes).any(), "NaN in prototype"
         self.prototypes = prototypes # Size N_old * C, where N_old and C are n_classes and n_channels of feature map
         self.prototypes.detach()
@@ -304,16 +305,11 @@ class RebalanceKD(nn.Module):
         preds_T = preds_T.permute(0, 2, 3, 1).contiguous().view(B*H*W, -1)[mask] # T * N_old
         seg = seg.view(B*H*W)[mask] # T
         T = seg.size(0)
-        # print(torch.unique(seg))
-        # print(torch.sum(batch_prototypes[:old_classes,:]))
-        #assert torch.all(seg >= old_classes)
-
         proto_by_label = batch_prototypes[seg] # T * C
         r_map = pairwise_cosine_sim(proto_by_label, self.prototypes.to(proto_by_label.device)) # T * N_old
         r_map = F.softmax(r_map, dim=-1)
-        #r_map[r_map < (1.0/r_map.size(1))] = 0.0
-        #r_map[:,0] = 0
-        # print(r_map)
+        r_map[r_map < (self.delta/r_map.size(1))] = 0.0
+
         preds_S = F.log_softmax(preds_S / self.T, dim=1)
         preds_T = F.softmax(preds_T / self.T, dim=1)
         preds_T = preds_T * r_map + 10 ** (-7)
@@ -321,7 +317,7 @@ class RebalanceKD(nn.Module):
         loss = self.T * self.T * torch.sum(-preds_T*preds_S)/T
         return loss
 
-class UnbiasedRebalanceKD(nn.Module):
+class UnbiasedClassSimilarityWeightedKD(nn.Module):
     def __init__(self,prototypes, temperature=1):
         super().__init__()
         self.T = temperature
@@ -474,52 +470,6 @@ class SoftContrastiveLoss(nn.Module):
         if torch.isnan(loss_features_clustering):  loss_features_clustering = torch.tensor(0.)
         loss_separationclustering *= self.lfc_sep_clust
         return loss_features_clustering + loss_separationclustering
-
-# class SoftContrastiveLoss(nn.Module):
-#     """the multi-class n-pair loss"""
-#     def __init__(self, l2_reg=0.02):
-#         super(SoftContrastiveLoss, self).__init__()
-#         self.l2_reg = l2_reg
-
-#     def forward(self, features, seg, current_prototypes, ref_prototypes, mask, hard=False):
-#         '''
-#         Parameters
-#         ----------
-#         features: logits of each pixel, shape BxCxHxW
-#         seg: segmentation map, shape BxHxW
-#         current_prototypes: prototypes of current batch, shape N_crnt x C
-#         ref_prototypes: reference prototypes for contrastive learning, shape N_ref x C
-#         mask: mask out pixels with ignore_labels, shape BxHxW
-
-#         Returns: scalar loss value
-#         -------
-#         '''
-#         device = features.device
-#         B, _, H, W = features.shape
-#         features = features.permute(0, 2, 3, 1).contiguous().view(B * H * W, -1)[mask] # T * C, where T=BxHxW
-#         ref_prototypes.detach()
-#         current_prototypes.detach()
-#         seg = seg.view(B * H * W)[mask]  # T
-#         T = seg.size(0)
-        
-#         representative = current_prototypes[seg]  # T * C
-#         ref_prototypes = ref_prototypes.to(device)
-#         representative = representative.to(device)
-#         logit = pairwise_cosine_sim(features, ref_prototypes) # T * N_ref
-#         target = F.softmax(pairwise_cosine_sim(representative, ref_prototypes)) # T * N_ref
-#         if hard:
-#             n_cls = target.size(1)
-#             target = target.argmax(dim=1)
-#             target = F.one_hot(target, num_classes=n_cls)
-
-#         # logit = torch.matmul(features, torch.transpose(ref_prototypes, 0, 1))
-#         # target = F.softmax(torch.matmul(representative, torch.transpose(ref_prototypes, 0, 1)), dim=-1)
-
-#         loss_ce = cross_entropy(logit, target)
-#         l2_loss = torch.sum(features ** 2) / T
-#         #l2_loss = 0
-#         loss = loss_ce + self.l2_reg*l2_loss*0.25
-#         return loss
 
 class OldSoftContrastiveLoss(nn.Module):
     """the multi-class n-pair loss"""

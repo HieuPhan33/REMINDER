@@ -7,16 +7,16 @@ start=`date +%s`
 START_DATE=$(date '+%Y-%m-%d')
 
 PORT=$((9000 + RANDOM % 1000))
-GPU=1
-NB_GPU=1
+GPU=2,3
+NB_GPU=2
 
 
 DATA_ROOT=/media/Z/data/PascalVOC12
 
 DATASET=voc
-TASK=15-5
+TASK=19-1
 LOSS=0.5
-NAME=PLOP
+NAME=RKD
 METHOD=PLOP
 
 OPTIONS="--checkpoint checkpoints/step/"
@@ -39,13 +39,14 @@ echo "Writing in ${RESULTSFILE}"
 # And for the second step, this option:
 # --step_ckpt ${FIRSTMODEL}
 
-BATCH_SIZE=4
+BATCH_SIZE=16
 INITIAL_EPOCHS=30
 EPOCHS=30
-FIRSTMODEL=checkpoints/step/15-5-voc_PLOP_0.pth
+FIRSTMODEL=checkpoints/step/15-5-voc_RKD_0.pth
 
-CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} save_features.py --ckpt ${FIRSTMODEL} --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 0 --lr 0.01 --epochs ${INITIAL_EPOCHS} --method ${METHOD} --rebal_kd ${LOSS} --opt_level O1 ${OPTIONS}
-CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} save_features.py --ckpt checkpoints/step/15-5-voc_PLOP_1.pth --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 1 --lr 0.001 --epochs ${EPOCHS} --method ${METHOD} --rebal_kd ${LOSS} --opt_level O1 ${OPTIONS}
+CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size 16 --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 0 --lr 0.01 --epochs ${INITIAL_EPOCHS} --method ${METHOD} --ClassSimilarityWeightedKD ${LOSS} --opt_level O1 ${OPTIONS}
+CUDA_VISIBLE_DEVICES=${GPU} python3 -m torch.distributed.launch --master_port ${PORT} --nproc_per_node=${NB_GPU} run.py --date ${START_DATE} --data_root ${DATA_ROOT} --overlap --batch_size ${BATCH_SIZE} --dataset ${DATASET} --name ${NAME} --task ${TASK} --step 1 --lr 0.001 --epochs ${EPOCHS} --method ${METHOD} --ClassSimilarityWeightedKD ${LOSS} --opt_level O1 ${OPTIONS}
+python3 average_csv.py ${RESULTSFILE}
 
 echo ${SCREENNAME}
 
