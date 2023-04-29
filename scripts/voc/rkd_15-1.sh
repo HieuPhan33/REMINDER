@@ -11,12 +11,12 @@ GPU=0,1
 NB_GPU=2
 
 
-DATA_ROOT=/media/Z/data/PascalVOC12
+DATA_ROOT=/media/hieu/DATA/semantic_segmentation/PascalVOC12
 
 DATASET=voc
 TASK=15-5s
-NAME=RKD_ENC
-LOSS=1.0
+NAME=RKD_TEST
+LOSS=0.5
 METHOD=PLOP
 OPTIONS="--checkpoint checkpoints/step/"
 FIRSTMODEL=checkpoints/step/15-5s-voc_RKD_0.pth

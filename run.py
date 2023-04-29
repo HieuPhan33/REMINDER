@@ -279,6 +279,7 @@ def run_step(opts, world_size, rank, device):
         scheduler = utils.PolyLR(
             optimizer, max_iters=opts.epochs * len(train_loader), power=opts.lr_power
         )
+        print("Max iter = ", opts.epochs * len(train_loader))
     elif opts.lr_policy == 'step':
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, step_size=opts.lr_decay_step, gamma=opts.lr_decay_factor
