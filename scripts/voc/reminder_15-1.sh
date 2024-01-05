@@ -7,11 +7,11 @@ start=`date +%s`
 START_DATE=$(date '+%Y-%m-%d')
 
 PORT=$((9000 + RANDOM % 1000))
-GPU=0,1
-NB_GPU=2
+GPU=0
+NB_GPU=1
 
 
-DATA_ROOT=~/data/PascalVOC12
+DATA_ROOT=/data
 
 DATASET=voc
 TASK=15-5s

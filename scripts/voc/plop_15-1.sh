@@ -11,7 +11,7 @@ GPU=0,1
 NB_GPU=2
 
 
-DATA_ROOT=/path/to/my/pascalvoc
+DATA_ROOT=/data
 
 DATASET=voc
 TASK=15-5s

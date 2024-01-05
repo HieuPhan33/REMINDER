@@ -11,6 +11,9 @@ from torch import distributed
 from .utils import Subset, filter_images, group_images
 import torch
 from torch import nn
+from PIL import Image, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 
 classes = {
     0: 'background',
@@ -71,7 +74,7 @@ class VOCSegmentation(data.Dataset):
             and returns a transformed version. E.g, ``transforms.RandomCrop``
     """
 
-    def __init__(self, root, image_set='train', is_aug=True, transform=None):
+    def __init__(self, root, image_set='train', is_aug=False, transform=None):
 
         self.root = os.path.expanduser(root)
         self.year = "2012"
@@ -90,7 +93,7 @@ class VOCSegmentation(data.Dataset):
             )
 
         if is_aug and image_set == 'train':
-            mask_dir = os.path.join(voc_root, 'SegmentationClassAug')
+            mask_dir = os.path.join(voc_root, "VOCdevkit/VOC2012", 'SegmentationClassAug')
             assert os.path.exists(mask_dir), "SegmentationClassAug not found"
             split_f = os.path.join(splits_dir, 'train_aug.txt')
         else:
@@ -106,12 +109,11 @@ class VOCSegmentation(data.Dataset):
         # remove leading \n
         with open(os.path.join(split_f), "r") as f:
             file_names = [x[:-1].split(' ') for x in f.readlines()]
-
         # REMOVE FIRST SLASH OTHERWISE THE JOIN WILL start from root
         self.images = [
             (
                 os.path.join(voc_root, "VOCdevkit/VOC2012",
-                             x[0][1:]), os.path.join(voc_root, x[1][1:])
+                             x[0][1:]), os.path.join(voc_root,  "VOCdevkit/VOC2012", x[1][1:])
             ) for x in file_names
         ]
 

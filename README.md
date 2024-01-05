@@ -36,6 +36,13 @@ cd apex
 pip3 install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 ```
 
+## Docker image option:
+I have created a docker image at `stevephan46/reminder:latest`.
+Use this command to create a docker container with pre-installed environment:
+```
+docker run --name reminder -it --gpus all --shm-size=4g stevephan46/reminder:latest /bin/bash
+```
+
 
 # Dataset
 
@@ -54,7 +61,7 @@ To run it, simpy use the following command:
 
 The default is to use a pretraining for the backbone used, that is searched in the pretrained folder of the project.
 We used the pretrained model released by the authors of In-place ABN (as said in the paper), that can be found here:
- [link](https://github.com/mapillary/inplace_abn#training-on-imagenet-1k).
+ [link](https://github.com/mapillary/inplace_abn#training-on-imagenet-1k). The model can also be downloaded here: [link](https://github.com/arthurdouillard/CVPR2021_PLOP/releases/download/v1.0/resnet101_iabn_sync.pth.tar).
 
 Since the pretrained are made on multiple-gpus, they contain a prefix "module." in each key of the network. Please, be sure to remove them to be compatible with this code (simply rename them using key = key\[7:\]) (if you're working on single gpu).
 If you don't want to use pretrained, please use --no-pretrained.
