@@ -23,7 +23,7 @@ def compute_prototype(seg,features,classes):
     B,H,W = seg.shape
     features = F.interpolate(features, size=(H, W), mode='bilinear', align_corners=True)
     seg = seg.view(-1)
-    features = features.permute(0,3,1,2).contiguous().view(B*H*W, -1)
+    features = features.permute(0,2,3,1).contiguous().view(B*H*W, -1)
     for c in classes:
         selected_features = features[seg==c]
         if len(selected_features) > 0:
